@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f4f8;
+            color: #334155;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 800px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .image-preview-container {
+            position: relative;
+            max-width: 100%;
+            max-height: 500px;
+            overflow: hidden;
+            margin-top: 20px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        .image-preview {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            transform-origin: center center;
+            cursor: default;
+        }
+        .image-preview.cropping {
+            cursor: crosshair;
+        }
+        .image-preview.rotating {
+            cursor: grab;
+        }
+        .image-preview.rotating.grabbing {
+            cursor: grabbing;
+        }
+        .crop-selection {
+            position: absolute;
+            border: 2px dashed #ef4444;
+            background-color: rgba(239, 68, 68, 0.2);
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        .form-section {
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        .form-section label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .form-section select, .form-section input[type="file"], .form-section input[type="range"], .form-section input[type="color"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            margin-top: 5px;
+        }
+        .submit-button {
+            background-color: #4f46e5;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+        }
+        .submit-button:hover {
+            background-color: #4338ca;
+        }
+        .message-box {
+            margin-top: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            width: 100%;
+            text-align: center;
+        }
+        .message-box.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message-box.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .hidden {
+            display: none;
+        }
+        .angle-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            z-index: 10;
+        }
+        /* Canvas specific styles */
+        #drawingCanvas {
+            border: 1px solid #ccc;
+            background-color: transparent;
+            cursor: crosshair;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            max-width: 100%;
+            height: auto;
+        }
+        .canvas-controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .canvas-controls label {
+            margin-bottom: 0;
+            display: inline-block;
+            width: auto;
+        }
+        .canvas-controls input[type="color"] {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: 50%;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .canvas-controls input[type="range"] {
+            flex-grow: 1;
+        }
+        .canvas-controls span {
+            min-width: 30px;
+            text-align: center;
+        }
+        .ai-output-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e0f2fe;
+            border: 1px solid #90cdf4;
+            border-radius: 8px;
+            width: 100%;
+            text-align: left;
+        }
+        .ai-output-section h3 {
+            font-weight: 600;
+            color: #2b6cb0;
+            margin-bottom: 10px;
+        }
+        .ai-output-section p {
+            color: #4a5568;
+            line-height: 1.5;
+        }
+        /* Loading Indicator Styles */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #4f46e5;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6">Image Processor</h1>
+
+        <form id="imageProcessForm" method="post" enctype="multipart/form-data" action="{% url 'myapp:image_processing' %}" class="w-full">
+            {% csrf_token %}
+
+            <!-- Image Upload Field -->
+            <div class="form-section">
+                <label for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+                {{ form.image }}
+                {% if form.image.errors %}
+                    <p class="text-red-500 text-sm mt-1">{{ form.image.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Operation Choice Field -->
+            <div class="form-section">
+                <label for="{{ form.operation.id_for_label }}">{{ form.operation.label }}</label>
+                {{ form.operation }}
+                {% if form.operation.errors %}
+                    <p class="text-red-500 text-sm mt-1">{{ form.operation.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Blur Intensity Field (Conditionally visible) -->
+            <div class="form-section hidden" id="blurIntensitySection">
+                <label for="{{ form.blur_intensity.id_for_label }}">{{ form.blur_intensity.label }}</label>
+                {{ form.blur_intensity }}
+                <span id="blurValueDisplay" class="text-sm text-gray-600 mt-1 block">Value: {{ form.blur_intensity.initial }}</span>
+                {% if form.blur_intensity.errors %}
+                    <p class="text-red-500 text-sm mt-1">{{ form.blur_intensity.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Rotation Angle Field (Conditionally visible - now hidden input) -->
+            <div class="form-section hidden" id="rotationAngleSection">
+                <label>{{ form.rotation_angle.label }}</label>
+                {{ form.rotation_angle }}
+                <span id="rotationValueDisplay" class="text-sm text-gray-600 mt-1 block">Angle: 0°</span>
+                {% if form.rotation_angle.errors %}
+                    <p class="text-red-500 text-sm mt-1">{{ form.rotation_angle.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Resize Scale Field (Conditionally visible) -->
+            <div class="form-section hidden" id="resizeScaleSection">
+                <label for="{{ form.scale_factor.id_for_label }}">{{ form.scale_factor.label }}</label>
+                {{ form.scale_factor }}
+                {% if form.scale_factor.errors %}
+                    <p class="text-red-500 text-sm mt-1">{{ form.scale_factor.errors }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Drawing Tool Controls (Conditionally visible) -->
+            <div class="form-section hidden" id="drawingControlsSection">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Drawing Tools</h3>
+                <div class="canvas-controls">
+                    <label for="brushColor">Color:</label>
+                    <input type="color" id="brushColor" value="#FF0000">
+                    <label for="brushSize">Size:</label>
+                    <input type="range" id="brushSize" min="1" max="20" value="5">
+                    <span id="brushSizeDisplay">5px</span>
+                </div>
+            </div>
+
+            <!-- Hidden Crop Inputs (Populated by JS) -->
+            {{ form.crop_top }}
+            {{ form.crop_left }}
+            {{ form.crop_width }}
+            {{ form.crop_height }}
+
+            <!-- Image Preview and Interaction Area -->
+            <div id="imagePreviewContainer" class="image-preview-container hidden">
+                <img id="imagePreview" class="image-preview" src="" alt="Image Preview">
+                <canvas id="drawingCanvas" class="hidden"></canvas>
+                <div id="cropSelection" class="crop-selection hidden"></div>
+                <div id="rotationAngleOverlay" class="angle-overlay hidden">0°</div>
+            </div>
+
+            <button type="submit" class="submit-button">Process Image</button>
+
+            <div id="messageBox" class="message-box hidden"></div>
+        </form>
+
+        <!-- Display Processed Image (for operations that return an image) -->
+        <div id="processedImageSection" class="mt-8 text-center w-full hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Processed Image</h2>
+            <img id="processedImageDisplay" src="" alt="Processed Image" class="max-w-full h-auto rounded-lg shadow-md border border-gray-200">
+            <p class="text-sm text-gray-600 mt-2">Right-click to save or download.</p>
+        </div>
+
+
+        <!-- Display AI Caption Output -->
+        <div id="aiCaptionOutputSection" class="ai-output-section hidden">
+            <h3 class="text-xl">Image Caption:</h3>
+            <p id="aiCaptionText" class="text-lg font-medium"></p>
+            <!-- Optionally display the original image if AI operation doesn't return a new one -->
+            <div id="aiOriginalImageDisplay" class="mt-4 text-center hidden">
+                <h4 class="text-md font-semibold text-gray-700 mb-2">Original Image:</h4>
+                <img id="aiOriginalImage" src="" alt="Original Image for AI" class="max-w-full h-auto rounded-lg shadow-md border border-gray-200">
+            </div>
+        </div>
+
+        <!-- Display AI Object Detection Output -->
+        <div id="aiObjectDetectionOutputSection" class="ai-output-section hidden">
+            <h3 class="text-xl">Detected Objects:</h3>
+            <p id="aiObjectDetectionText" class="text-lg font-medium"></p>
+            <div id="aiObjectDetectionOriginalImageDisplay" class="mt-4 text-center hidden">
+                <h4 class="text-md font-semibold text-gray-700 mb-2">Original Image:</h4>
+                <img id="aiObjectDetectionOriginalImage" src="" alt="Original Image for AI" class="max-w-full h-auto rounded-lg shadow-md border border-gray-200">
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+        </div>
+
+
+        {% comment %}
+            This block for form_errors is now handled by JavaScript for dynamic updates.
+            Keeping it commented out here to avoid rendering duplicate error messages.
+        {% endcomment %}
+        {# {% if form_errors %}
+            <div class="message-box error mt-4">
+                <p>Please correct the following errors:</p>
+                <ul class="list-disc list-inside text-left">
+                    {% for field, errors in form_errors.items %}
+                        <li><strong>{{ field }}:</strong> {{ errors|join:", " }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %} #}
+    </div>
+
+    <script>
+        // Pass Django context variables to JavaScript
+        const djangoProcessedImageUrl = "{% if processed_image_url %}{{ processed_image_url }}{% else %}{% endif %}";
+        const djangoImageOriginalUrl = "{% if image_original_url %}{{ image_original_url }}{% else %}{% endif %}";
+        const djangoImageCaption = "{% if image_caption %}{{ image_caption|escapejs }}{% else %}{% endif %}";
+        const djangoDetectedObjects = "{% if detected_objects %}{{ detected_objects|escapejs }}{% else %}{% endif %}";
+        // Use json_script filter to safely pass form_errors dictionary
+        // This script tag is generated by Django when form_errors is present
+        const formErrorsJsonElement = document.getElementById('form_errors_json');
+        const djangoFormErrors = formErrorsJsonElement ? JSON.parse(formErrorsJsonElement.textContent) : {};
+
+
+        const imageInput = document.getElementById('id_image');
+        const operationSelect = document.getElementById('id_operation');
+        const blurIntensitySection = document.getElementById('blurIntensitySection');
+        const rotationAngleSection = document.getElementById('rotationAngleSection');
+        const resizeScaleSection = document.getElementById('resizeScaleSection');
+        const drawingControlsSection = document.getElementById('drawingControlsSection');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const cropSelection = document.getElementById('cropSelection');
+        const blurValueDisplay = document.getElementById('blurValueDisplay');
+        const blurIntensityInput = document.getElementById('id_blur_intensity');
+        const rotationValueDisplay = document.getElementById('rotationValueDisplay');
+        const rotationAngleOverlay = document.getElementById('rotationAngleOverlay');
+
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const ctx = drawingCanvas.getContext('2d');
+        const brushColorInput = document.getElementById('brushColor');
+        const brushSizeInput = document.getElementById('brushSize');
+        const brushSizeDisplay = document.getElementById('brushSizeDisplay');
+
+        const cropTopInput = document.getElementById('id_crop_top');
+        const cropLeftInput = document.getElementById('id_crop_left');
+        const cropWidthInput = document.getElementById('id_crop_width');
+        const cropHeightInput = document.getElementById('id_crop_height');
+        const rotationAngleInput = document.getElementById('id_rotation_angle');
+
+        const imageProcessForm = document.getElementById('imageProcessForm');
+
+        // AI Output Elements
+        const aiCaptionOutputSection = document.getElementById('aiCaptionOutputSection');
+        const aiCaptionText = document.getElementById('aiCaptionText');
+        const aiOriginalImageDisplay = document.getElementById('aiOriginalImageDisplay');
+        const aiOriginalImage = document.getElementById('aiOriginalImage');
+        const aiObjectDetectionOutputSection = document.getElementById('aiObjectDetectionOutputSection');
+        const aiObjectDetectionText = document.getElementById('aiObjectDetectionText');
+        const aiObjectDetectionOriginalImageDisplay = document.getElementById('aiObjectDetectionOriginalImageDisplay');
+        const aiObjectDetectionOriginalImage = document.getElementById('aiObjectDetectionOriginalImage');
+
+        // Processed Image Display Elements
+        const processedImageSection = document.getElementById('processedImageSection');
+        const processedImageDisplay = document.getElementById('processedImageDisplay');
+
+        // Loading Overlay
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+
+        let isCropping = false;
+        let startX_crop, startY_crop;
+        let cropRect = { top: 0, left: 0, width: 0, height: 0 };
+
+        let isRotating = false;
+        let currentRotationAngle = 0;
+        let startMouseAngle_rotate = 0;
+        let startObjectAngle_rotate = 0;
+
+        let isDrawing = false;
+        let lastX_draw = 0;
+        let lastY_draw = 0;
+        let brushColor = brushColorInput.value;
+        let brushSize = parseInt(brushSizeInput.value);
+
+        // --- UI Visibility Logic ---
+        function toggleOperationFields() {
+            const selectedOperation = operationSelect.value;
+
+            // Hide all specific operation sections and reset states
+            blurIntensitySection.classList.add('hidden');
+            rotationAngleSection.classList.add('hidden');
+            resizeScaleSection.classList.add('hidden');
+            drawingControlsSection.classList.add('hidden');
+            imagePreviewContainer.classList.add('hidden');
+            aiCaptionOutputSection.classList.add('hidden');
+            aiObjectDetectionOutputSection.classList.add('hidden');
+            processedImageSection.classList.add('hidden');
+
+            imagePreview.classList.add('hidden'); // Hide image element by default
+            drawingCanvas.classList.add('hidden'); // Hide canvas element by default
+
+            imagePreview.classList.remove('cropping', 'rotating', 'grabbing');
+            cropSelection.classList.add('hidden');
+            rotationAngleOverlay.classList.add('hidden');
+
+            resetCropInputs();
+            resetRotationInputs();
+            resetDrawingCanvas();
+
+            // Show relevant sections based on selected operation
+            if (imageInput.files[0]) {
+                imagePreviewContainer.classList.remove('hidden');
+                imagePreview.classList.remove('hidden'); // Image is visible by default
+
+                if (selectedOperation === 'blur') {
+                    blurIntensitySection.classList.remove('hidden');
+                } else if (selectedOperation === 'rotate') {
+                    rotationAngleSection.classList.remove('hidden');
+                    imagePreview.classList.add('rotating');
+                    rotationAngleOverlay.classList.remove('hidden');
+                } else if (selectedOperation === 'resize') {
+                    resizeScaleSection.classList.remove('hidden');
+                } else if (selectedOperation === 'crop') {
+                    imagePreview.classList.add('cropping');
+                } else if (selectedOperation === 'draw') {
+                    drawingControlsSection.classList.remove('hidden');
+                    drawingCanvas.classList.remove('hidden');
+                    setTimeout(loadImageToCanvas, 50);
+                } else if (selectedOperation === 'image_captioning' || selectedOperation === 'background_removal' || selectedOperation === 'object_detection') {
+                    // No extra controls needed, just show the image preview
+                    // Output sections will be populated on form submission success
+                }
+            }
+        }
+
+        // --- Image Preview and Cropping/Rotation/Drawing Reset Logic ---
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    imagePreview.src = event.target.result;
+                    imagePreview.onload = () => {
+                        toggleOperationFields();
+                    };
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imagePreview.src = '';
+                toggleOperationFields();
+            }
+        });
+
+        function resetCropInputs() {
+            cropSelection.classList.add('hidden');
+            cropSelection.style.width = '0px';
+            cropSelection.style.height = '0px';
+            cropSelection.style.top = '0px';
+            cropSelection.style.left = '0px';
+            cropTopInput.value = '';
+            cropLeftInput.value = '';
+            cropWidthInput.value = '';
+            cropHeightInput.value = '';
+            cropRect = { top: 0, left: 0, width: 0, height: 0 };
+        }
+
+        function resetRotationInputs() {
+            currentRotationAngle = 0;
+            imagePreview.style.transform = `rotate(0deg)`;
+            rotationAngleInput.value = 0;
+            rotationValueDisplay.textContent = `Angle: 0°`;
+            rotationAngleOverlay.textContent = `0°`;
+        }
+
+        function resetDrawingCanvas() {
+            ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            drawingCanvas.width = 0;
+            drawingCanvas.height = 0;
+        }
+
+        // --- Drawing Canvas Logic ---
+        function loadImageToCanvas() {
+            if (!imagePreview.src) return;
+
+            const img = new Image();
+            img.onload = () => {
+                drawingCanvas.width = img.naturalWidth;
+                drawingCanvas.height = img.naturalHeight;
+
+                drawingCanvas.style.width = imagePreview.width + 'px';
+                drawingCanvas.style.height = imagePreview.height + 'px';
+
+                const imgRect = imagePreview.getBoundingClientRect();
+                const containerRect = imagePreviewContainer.getBoundingClientRect();
+                drawingCanvas.style.left = `${imgRect.left - containerRect.left}px`;
+                drawingCanvas.style.top = `${imgRect.top - containerRect.top}px`;
+
+                ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                ctx.drawImage(img, 0, 0, drawingCanvas.width, drawingCanvas.height);
+            };
+            img.src = imagePreview.src;
+        }
+
+        // Helper to get scaled coordinates for drawing on canvas
+        function getScaledCanvasCoordinates(e) {
+            const rect = drawingCanvas.getBoundingClientRect();
+            const scaleX = drawingCanvas.width / rect.width;
+            const scaleY = drawingCanvas.height / rect.height;
+
+            const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+            return { x, y };
+        }
+
+        drawingCanvas.addEventListener('mousedown', (e) => {
+            if (operationSelect.value !== 'draw') return;
+            isDrawing = true;
+            const { x, y } = getScaledCanvasCoordinates(e);
+            lastX_draw = x;
+            lastY_draw = y;
+        });
+
+        drawingCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || operationSelect.value !== 'draw') return;
+            const { x, y } = getScaledCanvasCoordinates(e);
+
+            ctx.beginPath();
+            ctx.moveTo(lastX_draw, lastY_draw);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = brushColor;
+            ctx.lineWidth = brushSize;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            lastX_draw = x;
+            lastY_draw = y;
+        });
+
+        drawingCanvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        drawingCanvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+        });
+
+        drawingCanvas.addEventListener('touchstart', (e) => {
+            if (operationSelect.value !== 'draw') return;
+            e.preventDefault();
+            isDrawing = true;
+            const { x, y } = getScaledCanvasCoordinates(e);
+            lastX_draw = x;
+            lastY_draw = y;
+        });
+
+        drawingCanvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing || operationSelect.value !== 'draw') return;
+            e.preventDefault();
+            const { x, y } = getScaledCanvasCoordinates(e);
+
+            ctx.beginPath();
+            ctx.moveTo(lastX_draw, lastY_draw);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = brushColor;
+            ctx.lineWidth = brushSize;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            lastX_draw = x;
+            lastY_draw = y;
+        });
+
+        drawingCanvas.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+
+        // Drawing tool controls
+        brushColorInput.addEventListener('input', (e) => {
+            brushColor = e.target.value;
+        });
+
+        brushSizeInput.addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+            brushSizeDisplay.textContent = `${brushSize}px`;
+        });
+
+        // --- Cropping Mouse/Touch Events ---
+        imagePreview.addEventListener('mousedown', (e) => {
+            if (operationSelect.value !== 'crop') return;
+            isCropping = true;
+            cropSelection.classList.remove('hidden');
+            e.preventDefault();
+
+            const imgRect = imagePreview.getBoundingClientRect();
+            startX_crop = e.clientX - imgRect.left;
+            startY_crop = e.clientY - imgRect.top;
+
+            const containerRect = imagePreviewContainer.getBoundingClientRect();
+            const imageOffsetX = imgRect.left - containerRect.left;
+            const imageOffsetY = imgRect.top - containerRect.top;
+
+            cropSelection.style.left = `${imageOffsetX + startX_crop}px`;
+            cropSelection.style.top = `${imageOffsetY + startY_crop}px`;
+            cropSelection.style.width = '0px';
+            cropSelection.style.height = '0px';
+
+            cropRect.left = Math.round(startX_crop);
+            cropRect.top = Math.round(startY_crop);
+            cropRect.width = 0;
+            cropRect.height = 0;
+
+            updateHiddenCropInputs();
+        });
+
+        imagePreview.addEventListener('mousemove', (e) => {
+            if (!isCropping || operationSelect.value !== 'crop') return;
+
+            const imgRect = imagePreview.getBoundingClientRect();
+            const currentX = e.clientX - imgRect.left;
+            const currentY = e.clientY - imgRect.top;
+
+            let width = currentX - startX_crop;
+            let height = currentY - startY_crop;
+            let left = startX_crop;
+            let top = startY_crop;
+
+            if (width < 0) {
+                left = currentX;
+                width = Math.abs(width);
+            }
+            if (height < 0) {
+                top = currentY;
+                height = Math.abs(height);
+            }
+
+            left = Math.max(0, left);
+            top = Math.max(0, top);
+            width = Math.min(width, imgRect.width - left);
+            height = Math.min(height, imgRect.height - top);
+
+            const containerRect = imagePreviewContainer.getBoundingClientRect();
+            const imageOffsetX = imgRect.left - containerRect.left;
+            const imageOffsetY = imgRect.top - containerRect.top;
+
+            cropSelection.style.left = `${imageOffsetX + left}px`;
+            cropSelection.style.top = `${imageOffsetY + top}px`;
+            cropSelection.style.width = `${width}px`;
+            cropSelection.style.height = `${height}px`;
+
+            const scaleX = imagePreview.naturalWidth / imgRect.width;
+            const scaleY = imagePreview.naturalHeight / imgRect.height;
+
+            cropRect.left = Math.round(left * scaleX);
+            cropRect.top = Math.round(top * scaleY);
+            cropRect.width = Math.round(width * scaleX);
+            cropRect.height = Math.round(height * scaleY);
+
+            updateHiddenCropInputs();
+        });
+
+        document.addEventListener('mouseup', () => {
+            isCropping = false;
+        });
+
+        imagePreview.addEventListener('touchstart', (e) => {
+            if (operationSelect.value !== 'crop') return;
+            e.preventDefault();
+            isCropping = true;
+            cropSelection.classList.remove('hidden');
+
+            const touch = e.touches[0];
+            const imgRect = imagePreview.getBoundingClientRect();
+            startX_crop = touch.clientX - imgRect.left;
+            startY_crop = touch.clientY - imgRect.top;
+
+            const containerRect = imagePreviewContainer.getBoundingClientRect();
+            const imageOffsetX = imgRect.left - containerRect.left;
+            const imageOffsetY = imgRect.top - containerRect.top;
+
+            cropSelection.style.left = `${imageOffsetX + startX_crop}px`;
+            cropSelection.style.top = `${imageOffsetY + startY_crop}px`;
+            cropSelection.style.width = '0px';
+            cropSelection.style.height = '0px';
+
+            cropRect.left = Math.round(startX_crop);
+            cropRect.top = Math.round(startY_crop);
+            cropRect.width = 0;
+            cropRect.height = 0;
+
+            updateHiddenCropInputs();
+        });
+
+        imagePreview.addEventListener('touchmove', (e) => {
+            if (!isCropping || operationSelect.value !== 'crop') return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const imgRect = imagePreview.getBoundingClientRect();
+            const currentX = touch.clientX - imgRect.left;
+            const currentY = touch.clientY - imgRect.top;
+
+            let width = currentX - startX_crop;
+            let height = currentY - startY_crop;
+            let left = startX_crop;
+            let top = startY_crop;
+
+            if (width < 0) {
+                left = currentX;
+                width = Math.abs(width);
+            }
+            if (height < 0) {
+                top = currentY;
+                height = Math.abs(height);
+            }
+
+            left = Math.max(0, left);
+            top = Math.max(0, top);
+            width = Math.min(width, imgRect.width - left);
+            height = Math.min(height, imgRect.height - top);
+
+            const containerRect = imagePreviewContainer.getBoundingClientRect();
+            const imageOffsetX = imgRect.left - containerRect.left;
+            const imageOffsetY = imgRect.top - containerRect.top;
+
+            cropSelection.style.left = `${imageOffsetX + left}px`;
+            cropSelection.style.top = `${imageOffsetY + top}px`;
+            cropSelection.style.width = `${width}px`;
+            cropSelection.style.height = `${height}px`;
+
+            const scaleX = imagePreview.naturalWidth / imgRect.width;
+            const scaleY = imagePreview.naturalHeight / imgRect.height;
+
+            cropRect.left = Math.round(left * scaleX);
+            cropRect.top = Math.round(top * scaleY);
+            cropRect.width = Math.round(width * scaleX);
+            cropRect.height = Math.round(height * scaleY);
+
+            updateHiddenCropInputs();
+        });
+
+        document.addEventListener('touchend', () => {
+            isCropping = false;
+        });
+
+        function updateHiddenCropInputs() {
+            cropTopInput.value = cropRect.top;
+            cropLeftInput.value = cropRect.left;
+            cropWidthInput.value = cropRect.width;
+            cropHeightInput.value = cropRect.height;
+        }
+
+        // --- Rotation Mouse/Touch Events ---
+        imagePreview.addEventListener('mousedown', (e) => {
+            if (operationSelect.value !== 'rotate') return;
+            if (isCropping) return;
+
+            isRotating = true;
+            imagePreview.classList.add('grabbing');
+            e.preventDefault();
+
+            const imgRect = imagePreview.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const centerY = imgRect.top + imgRect.height / 2;
+
+            startMouseAngle_rotate = getAngle(centerX, centerY, e.clientX, e.clientY);
+            startObjectAngle_rotate = currentRotationAngle;
+        }, true);
+
+        imagePreview.addEventListener('mousemove', (e) => {
+            if (!isRotating || operationSelect.value !== 'rotate') return;
+
+            const imgRect = imagePreview.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const centerY = imgRect.top + imgRect.height / 2;
+
+            const newMouseAngle = getAngle(centerX, centerY, e.clientX, e.clientY);
+            let angleDifference = newMouseAngle - startMouseAngle_rotate;
+
+            if (angleDifference > 180) {
+                angleDifference -= 360;
+            } else if (angleDifference < -180) {
+                angleDifference += 360;
+            }
+
+            const newObjectAngle = startObjectAngle_rotate + angleDifference;
+            updateRotationDisplay(newObjectAngle);
+        });
+
+        document.addEventListener('mouseup', () => {
+            isRotating = false;
+            imagePreview.classList.remove('grabbing');
+        });
+
+        imagePreview.addEventListener('touchstart', (e) => {
+            if (operationSelect.value !== 'rotate') return;
+            if (isCropping) return;
+
+            e.preventDefault();
+            isRotating = true;
+            imagePreview.classList.add('grabbing');
+
+            const touch = e.touches[0];
+            const imgRect = imagePreview.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const centerY = imgRect.top + imgRect.height / 2;
+
+            startMouseAngle_rotate = getAngle(centerX, centerY, touch.clientX, touch.clientY);
+            startObjectAngle_rotate = currentRotationAngle;
+        }, true);
+
+        imagePreview.addEventListener('touchmove', (e) => {
+            if (!isRotating || operationSelect.value !== 'rotate') return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const imgRect = imagePreview.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const centerY = imgRect.top + imgRect.height / 2;
+
+            const newMouseAngle = getAngle(centerX, centerY, touch.clientX, touch.clientY);
+            let angleDifference = newMouseAngle - startMouseAngle_rotate;
+
+            if (angleDifference > 180) {
+                angleDifference -= 360;
+            } else if (angleDifference < -180) {
+                angleDifference += 360;
+            }
+
+            const newObjectAngle = startObjectAngle_rotate + angleDifference;
+            updateRotationDisplay(newObjectAngle);
+        });
+
+        document.addEventListener('touchend', () => {
+            isRotating = false;
+            imagePreview.classList.remove('grabbing');
+        });
+
+        function getAngle(cx, cy, mx, my) {
+            const dx = mx - cx;
+            const dy = my - cy;
+            let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (angle + 360) % 360;
+        }
+
+        function updateRotationDisplay(angle) {
+            currentRotationAngle = (angle + 360) % 360;
+            imagePreview.style.transform = `rotate(${currentRotationAngle}deg)`;
+            rotationValueDisplay.textContent = `Angle: ${Math.round(currentRotationAngle)}°`;
+            rotationAngleOverlay.textContent = `${Math.round(currentRotationAngle)}°`;
+            rotationAngleInput.value = Math.round(currentRotationAngle);
+        }
+
+        // --- Event Listeners for UI and Form Submission ---
+        operationSelect.addEventListener('change', toggleOperationFields);
+        blurIntensityInput.addEventListener('input', () => {
+            blurValueDisplay.textContent = `Value: ${blurIntensityInput.value}`;
+        });
+
+        // Initial state setup
+        toggleOperationFields();
+        blurValueDisplay.textContent = `Value: ${blurIntensityInput.value}`;
+        updateRotationDisplay(0);
+
+        // Display messages from Django if any (on initial page load)
+        const messageBox = document.getElementById('messageBox');
+        if (djangoProcessedImageUrl && operationSelect.value !== 'image_captioning' && operationSelect.value !== 'object_detection') {
+            messageBox.classList.remove('hidden');
+            messageBox.classList.add('success');
+            messageBox.textContent = 'Image processed successfully!';
+            processedImageSection.classList.remove('hidden');
+            processedImageDisplay.src = djangoProcessedImageUrl;
+        } else if (Object.keys(djangoFormErrors).length > 0) {
+            messageBox.classList.remove('hidden');
+            messageBox.classList.add('error');
+            let errorHtml = '<p>Please correct the following errors:</p><ul>';
+
+            // Handle __all__ errors for initial page load
+            if (djangoFormErrors.__all__) {
+                let allErrors = Array.isArray(djangoFormErrors.__all__) ? djangoFormErrors.__all__ : [djangoFormErrors.__all__];
+                const formattedAllErrors = allErrors.map(error => {
+                    if (typeof error === 'object' && error !== null && error.message) {
+                        return error.message;
+                    } else if (typeof error === 'object' && error !== null) {
+                        return JSON.stringify(error);
+                    }
+                    return String(error);
+                });
+                errorHtml += `<li><strong>General:</strong> ${formattedAllErrors.join(', ')}</li>`;
+            }
+
+            for (const field in djangoFormErrors) {
+                if (field !== '__all__') {
+                    const errorsArray = djangoFormErrors[field];
+                    if (Array.isArray(errorsArray)) {
+                         errorHtml += `<li><strong>${field}:</strong> ${errorsArray.join(', ')}</li>`;
+                    } else {
+                         errorHtml += `<li><strong>${field}:</strong> ${String(errorsArray)}</li>`;
+                    }
+                }
+            }
+            errorHtml += '</ul>';
+            messageBox.innerHTML = errorHtml;
+        }
+
+        // Display AI caption if present from initial load
+        if (djangoImageCaption && operationSelect.value === 'image_captioning') {
+            aiCaptionOutputSection.classList.remove('hidden');
+            aiCaptionText.textContent = djangoImageCaption;
+            if (djangoImageOriginalUrl) {
+                aiOriginalImageDisplay.classList.remove('hidden');
+                aiOriginalImage.src = djangoImageOriginalUrl;
+            }
+        }
+
+        // Display AI object detection if present from initial load
+        if (djangoDetectedObjects && operationSelect.value === 'object_detection') {
+            aiObjectDetectionOutputSection.classList.remove('hidden');
+            aiObjectDetectionText.textContent = djangoDetectedObjects;
+            if (djangoImageOriginalUrl) {
+                aiObjectDetectionOriginalImageDisplay.classList.remove('hidden');
+                aiObjectDetectionOriginalImage.src = djangoImageOriginalUrl;
+            }
+        }
+
+
+        // --- Form Submission Handler (Modified for Canvas Image & AI Output) ---
+        imageProcessForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+
+            messageBox.classList.add('hidden'); // Hide previous messages
+            aiCaptionOutputSection.classList.add('hidden'); // Hide AI caption output on new submission
+            aiObjectDetectionOutputSection.classList.add('hidden'); // Hide object detection output on new submission
+            processedImageSection.classList.add('hidden'); // Hide processed image section on new submission
+
+            loadingOverlay.classList.remove('hidden'); // Show loading spinner
+
+            const formData = new FormData(imageProcessForm); // Get current form data
+            const selectedOperation = operationSelect.value; // Get selected operation
+
+            // If the 'draw' operation is selected and there's an image on canvas
+            if (selectedOperation === 'draw' && imageInput.files[0] && drawingCanvas.width > 0) {
+                const blob = await new Promise(resolve => drawingCanvas.toBlob(resolve, 'image/png'));
+                formData.set('image', blob, 'drawn_image.png');
+            }
+
+            // Submit the form data using fetch API
+            try {
+                const response = await fetch(imageProcessForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
+                });
+
+                const result = await response.json();
+
+                loadingOverlay.classList.add('hidden'); // Hide loading spinner
+
+                messageBox.classList.remove('hidden', 'success', 'error');
+                if (response.ok) {
+                    messageBox.classList.add('success');
+                    messageBox.textContent = result.message;
+
+                    // Handle AI Captioning output
+                    if (selectedOperation === 'image_captioning' && result.image_caption) {
+                        aiCaptionOutputSection.classList.remove('hidden');
+                        aiCaptionText.textContent = result.image_caption;
+                        if (result.image_original_url) {
+                            aiOriginalImageDisplay.classList.remove('hidden');
+                            aiOriginalImage.src = result.image_original_url;
+                        }
+                    }
+                    // Handle AI Object Detection output
+                    else if (selectedOperation === 'object_detection' && result.detected_objects) {
+                        aiObjectDetectionOutputSection.classList.remove('hidden');
+                        aiObjectDetectionText.textContent = result.detected_objects;
+                        if (result.image_original_url) {
+                            aiObjectDetectionOriginalImageDisplay.classList.remove('hidden');
+                            aiObjectDetectionOriginalImage.src = result.image_original_url;
+                        }
+                    }
+                    // Handle Background Removal and other image-modifying operations
+                    else if (result.processed_image_url) {
+                        processedImageSection.classList.remove('hidden');
+                        processedImageDisplay.src = result.processed_image_url;
+                        if (selectedOperation === 'background_removal') {
+                            messageBox.textContent = "Background removed successfully!";
+                        }
+                    }
+
+                } else {
+                    messageBox.classList.add('error');
+                    messageBox.textContent = result.message || 'An unknown error occurred.';
+                    if (result.errors) {
+                        let errorHtml = '<p>Please correct the following errors:</p><ul>';
+                        const parsedErrors = JSON.parse(result.errors);
+
+                        // Handle __all__ errors for AJAX submission
+                        if (parsedErrors.__all__) {
+                            let allErrors = Array.isArray(parsedErrors.__all__) ? parsedErrors.__all__ : [parsedErrors.__all__];
+                            const formattedAllErrors = allErrors.map(error => {
+                                if (typeof error === 'object' && error !== null && error.message) {
+                                    return error.message;
+                                } else if (typeof error === 'object' && error !== null) {
+                                    return JSON.stringify(error);
+                                }
+                                return String(error);
+                            });
+                            errorHtml += `<li><strong>General:</strong> ${formattedAllErrors.join(', ')}</li>`;
+                        }
+
+                        for (const field in parsedErrors) {
+                            if (field !== '__all__') {
+                                const errorsArray = parsedErrors[field];
+                                if (Array.isArray(errorsArray)) {
+                                     errorHtml += `<li><strong>${field}:</strong> ${errorsArray.join(', ')}</li>`;
+                                } else {
+                                     errorHtml += `<li><strong>${field}:</strong> ${String(errorsArray)}</li>`;
+                                }
+                            }
+                        }
+                        errorHtml += '</ul>';
+                        messageBox.innerHTML = errorHtml;
+                    }
+                }
+
+            } catch (error) {
+                loadingOverlay.classList.add('hidden');
+                messageBox.textContent = 'An error occurred: ' + error.message;
+                messageBox.classList.remove('hidden', 'success', 'error');
+                messageBox.classList.add('error');
+                console.error('Error submitting form:', error);
+            }
+        });
+    </script>
+</body>
+</html>
