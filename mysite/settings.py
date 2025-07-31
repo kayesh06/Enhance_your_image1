@@ -92,3 +92,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # IMPORTANT: Replace 'YOUR_REMOVE_BG_API_KEY_HERE' with your actual API key from remove.bg
 REMOVE_BG_API_KEY = '17hDVyNvZtBmTDndHjFkN4Ah'
 GEMINI_API_KEY ='AIzaSyA_3bnA1eQIgBUU4wuFXciksemr1uxQYME'
+REPLICATE_API_TOKEN=''
